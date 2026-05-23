@@ -12,6 +12,7 @@ from decimal import Decimal
 from web3 import Web3
 from web3.exceptions import ContractLogicError
 from eth_account import Account
+from web3.middleware import geth_poa_middleware
 
 # ─── Constants ────────────────────────────────────────────────
 MULTICALL3_ADDR = Web3.to_checksum_address(
@@ -350,6 +351,7 @@ def main():
     # ── RPC ────────────────────────────────────────────────────
     rpc_url = prompt("RPC URL")
     w3 = Web3(Web3.HTTPProvider(rpc_url))
+    w3.middleware_onion.inject(geth_poa_middleware, layer=0)
     if not w3.is_connected():
         print("  ✗ Cannot connect to RPC. Aborting.")
         sys.exit(1)
