@@ -426,13 +426,25 @@ def main():
     # max_fee_per_gas  = base_fee + 15%
     # max_priority_fee = 10% of max_fee_per_gas
     latest = w3.eth.get_block("latest")
-    base_fee         = latest["baseFeePerGas"]              # wei
-    max_fee_per_gas  = int(base_fee * 1.15)                # base + 15%
-    max_priority_fee = int(max_fee_per_gas * 0.10)         # 10% of max fee
+    
+    # Gunakan .get() agar tidak error jika jaringan tidak merespon baseFee
+    base_fee = latest.get("baseFeePerGas", 0)              
+    
+    # Perhitungan EIP-1559 Standar
+    calc_max_fee  = int(base_fee * 1.15)                
+    calc_priority = int(calc_max_fee * 0.10)         
+
+    # =========================================================
+    # 🛡️ PENGAMAN RPC PRIVAT (Menghindari Provide=0)
+    # =========================================================
+    MIN_REQUIRED_GAS = 50_000_000 # Sesuai error RPC Anda
+    
+    max_fee_per_gas = max(calc_max_fee, MIN_REQUIRED_GAS)
+    max_priority_fee = max(calc_priority, MIN_REQUIRED_GAS)
 
     print(f"\n  baseFeePerGas          = {w3.from_wei(base_fee, 'gwei'):.6f} gwei")
-    print(f"  maxFeePerGas  (+15%)   = {w3.from_wei(max_fee_per_gas, 'gwei'):.6f} gwei")
-    print(f"  maxPriorityFee (10%)   = {w3.from_wei(max_priority_fee, 'gwei'):.6f} gwei")
+    print(f"  maxFeePerGas           = {w3.from_wei(max_fee_per_gas, 'gwei'):.6f} gwei")
+    print(f"  maxPriorityFee         = {w3.from_wei(max_priority_fee, 'gwei'):.6f} gwei")
 
     # ── Gas estimate ──────────────────────────────────────────
     nonce = w3.eth.get_transaction_count(sender, "pending")
@@ -447,7 +459,6 @@ def main():
         gas_estimate = w3.eth.estimate_gas(estimate_tx)
     except (ContractLogicError, Exception) as exc:
         print(f"\n  ✗ Gas estimation failed: {exc}")
-        # gas_estimate = prompt_int("Fallback gas limit", 500_000)
         exit()
 
     gas_limit = int(gas_estimate * 1.10)   # +10 %
@@ -463,9 +474,9 @@ def main():
         "value":                total_value,
         "data":                 tx_data,
         "gas":                  gas_limit,
-        "maxFeePerGas":         max_fee_per_gas,
-        "maxPriorityFeePerGas": max_priority_fee,
-    }
+        "maxFeePerGas":         max_fee_per_gas,       # Sudah aman dari nilai 0
+        "maxPriorityFeePerGas": max_priority_fee,      # Sudah aman dari nilai 0
+     }
 
     # ── Summary ───────────────────────────────────────────────
     banner("Transaction Summary")
