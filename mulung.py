@@ -30,7 +30,7 @@ EIP7702_PREFIX = bytes.fromhex("ef0100")
 MEV_PROTECTED_RPC: dict[int, str] = {
     1:  "https://rpc.flashbots.net/fast",      # Ethereum → Flashbots
     56: "https://bscrpc.pancakeswap.finance",   # BSC → PancakeSwap
-    137: "https://polygon-rpc.com",             # Polygon public
+    137: "https://polygon-rpc.publicnode.com",             # Polygon public
     42161: "https://arb1.arbitrum.io/rpc",      # Arbitrum
     10: "https://mainnet.optimism.io",          # Optimism
 }
