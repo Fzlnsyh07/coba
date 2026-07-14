@@ -1,0 +1,50 @@
+[
+  {
+    "name": "execute",
+    "type": "function",
+    "stateMutability": "payable",
+    "inputs": [
+      {"name": "target", "type": "address"},
+      {"name": "value", "type": "uint256"},
+      {"name": "data", "type": "bytes"},
+      {"name": "operation", "type": "uint8"}
+    ],
+    "outputs": [
+      {"name": "result", "type": "bytes"}
+    ]
+  },
+  {
+    "name": "executeBatch",
+    "type": "function",
+    "stateMutability": "payable",
+    "inputs": [
+      {
+        "name": "executions",
+        "type": "tuple[]",
+        "components": [
+          {"name": "target", "type": "address"},
+          {"name": "value", "type": "uint256"},
+          {"name": "data", "type": "bytes"}
+        ]
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "name": "execute",
+    "type": "function",
+    "stateMutability": "payable",
+    "inputs": [
+      {
+        "name": "executions",
+        "type": "tuple[]",
+        "components": [
+          {"name": "target", "type": "address"},
+          {"name": "value", "type": "uint256"},
+          {"name": "data", "type": "bytes"}
+        ]
+      }
+    ],
+    "outputs": []
+  }
+]
